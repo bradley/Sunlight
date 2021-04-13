@@ -260,15 +260,15 @@ public extension SunlightRestClient {
   }
 }
 
-// Data to JSON Decodable
-fileprivate extension Publisher where Output == Data {
+// JSON to JSON Decodable
+fileprivate extension Publisher where Output == Any {
 
   func toJsonDecodable<T: SunlightRestJsonDecodable>(
     keypath: String? = nil
   ) -> AnyPublisher<T, Error> {
-    tryMap { json -> T in
+    tryMap { data -> T in
       try SunlightRestClient.SunlightRestJsonDecodableParser()
-        .toModel(json, keypath: keypath)
+        .toModel(data, keypath: keypath)
     }
     .receive(on: RunLoop.main)
     .eraseToAnyPublisher()
@@ -277,16 +277,16 @@ fileprivate extension Publisher where Output == Data {
   func toJsonDecodableArray<T: SunlightRestJsonDecodable>(
     keypath: String? = nil
   ) -> AnyPublisher<[T], Error> {
-    tryMap { json -> [T] in
+    tryMap { data -> [T] in
       SunlightRestClient.SunlightRestJsonDecodableParser()
-        .toModels(json, keypath: keypath)
+        .toModels(data, keypath: keypath)
     }
     .receive(on: RunLoop.main)
     .eraseToAnyPublisher()
   }
 }
 
-fileprivate extension Publisher where Output == (Data?, Progress) {
+fileprivate extension Publisher where Output == (Any?, Progress) {
 
   func toJsonDecodable<T: SunlightRestJsonDecodable>(
     keypath: String? = nil
