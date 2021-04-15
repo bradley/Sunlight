@@ -3,7 +3,6 @@ import Foundation
 
 extension SunlightRestClient {
   public class DownloadRequest: NSObject, URLSessionTaskDelegate {
-
     // The base SunlightRestClient client.
     public let client: SunlightRestClient
 
@@ -16,8 +15,6 @@ extension SunlightRestClient {
     public var requestTimeoutInterval: TimeInterval?
     public var sessionConfiguration: URLSessionConfiguration?
     public var operationQueue: OperationQueue?
-
-    let progressPublisher = PassthroughSubject<Progress, Error>()
 
     public init(
       client: SunlightRestClient,
@@ -37,23 +34,6 @@ extension SunlightRestClient {
       self.operationQueue = operationQueue
     }
 
-    // Conform to URLSessionTaskDelegate protocol.
-    public func urlSession(
-      _ session: URLSession,
-      task: URLSessionTask,
-      didSendBodyData bytesSent: Int64,
-      totalBytesSent: Int64,
-      totalBytesExpectedToSend: Int64
-    ) {
-      let progress = Progress(
-        totalUnitCount: totalBytesExpectedToSend
-      )
-
-      progress.completedUnitCount = totalBytesSent
-
-      progressPublisher.send(progress)
-    }
-
     public func publisher() -> AnyPublisher<(URL?, Progress), Error> {
       guard let urlRequest = buildRequest() else {
         return Fail(error: RestError.unableToParseRequest as Error)
@@ -69,24 +49,10 @@ extension SunlightRestClient {
       let callPublisher: AnyPublisher<(URL?, Progress), Error> = urlSession
         .sunlightDownloadTaskPublisher(for: urlRequest)
         .sunlightMapErrorToRestError()
-        .map { url -> (URL?, Progress) in
-          return (url, Progress())
-        }
         .eraseToAnyPublisher()
 
-      let internalProgressPublisher: AnyPublisher<(URL?, Progress), Error> =
-        progressPublisher
-        .map { progress -> (URL?, Progress) in
-          return (nil, progress)
-        }
+      return callPublisher
         .eraseToAnyPublisher()
-
-      return Publishers.Merge(
-        callPublisher,
-        internalProgressPublisher
-      )
-      .receive(on: DispatchQueue.main)
-      .eraseToAnyPublisher()
     }
 
     private var finalRequestHeaders: [String: String] {

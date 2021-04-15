@@ -18,8 +18,6 @@ extension SunlightRestClient {
     public var sessionConfiguration: URLSessionConfiguration?
     public var operationQueue: OperationQueue?
 
-    let progressPublisher = PassthroughSubject<Progress, Error>()
-
     public init(
       client: SunlightRestClient,
       route: String,
@@ -38,23 +36,6 @@ extension SunlightRestClient {
       self.requestTimeoutInterval = requestTimeoutInterval
       self.sessionConfiguration = sessionConfiguration
       self.operationQueue = operationQueue
-    }
-
-    // Conform to URLSessionTaskDelegate protocol.
-    public func urlSession(
-      _ session: URLSession,
-      task: URLSessionTask,
-      didSendBodyData bytesSent: Int64,
-      totalBytesSent: Int64,
-      totalBytesExpectedToSend: Int64
-    ) {
-      let progress = Progress(
-        totalUnitCount: totalBytesExpectedToSend
-      )
-
-      progress.completedUnitCount = totalBytesSent
-
-      progressPublisher.send(progress)
     }
 
     public func patchPublisher() -> AnyPublisher<(Data?, Progress), Error> {
@@ -84,26 +65,12 @@ extension SunlightRestClient {
       )
 
       let callPublisher: AnyPublisher<(Data?, Progress), Error> = urlSession
-        .dataTaskPublisher(for: urlRequest)
+        .sunlightMultipartUploadTaskPublisher(for: urlRequest)
         .sunlightMapErrorToRestError()
-        .map { data -> (Data?, Progress) in
-          return (data, Progress())
-        }
         .eraseToAnyPublisher()
 
-      let internalProgressPublisher: AnyPublisher<(Data?, Progress), Error> =
-        progressPublisher
-        .map { progress -> (Data?, Progress) in
-          return (nil, progress)
-        }
+      return callPublisher
         .eraseToAnyPublisher()
-
-      return Publishers.Merge(
-        callPublisher,
-        internalProgressPublisher
-      )
-      .receive(on: DispatchQueue.main)
-      .eraseToAnyPublisher()
     }
 
     private var finalRequestHeaders: [String: String] {

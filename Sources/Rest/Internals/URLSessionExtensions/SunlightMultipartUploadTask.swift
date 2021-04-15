@@ -1,24 +1,31 @@
+//
+//  SunlightMultipartUploadTask.swift
+//  UnionBroadcaster
+//
+//  Created by Bradley on 4/14/21.
+//
+
 import Combine
 import Foundation
 
 extension URLSession {
 
-  public func sunlightDownloadTaskPublisher(
+  public func sunlightMultipartUploadTaskPublisher(
     for url: URL
-  ) -> SunlightDownloadTaskPublisher {
-    self.sunlightDownloadTaskPublisher(for: URLRequest(url: url))
+  ) -> SunlightMultipartUploadTaskPublisher {
+    self.sunlightMultipartUploadTaskPublisher(for: URLRequest(url: url))
   }
 
-  public func sunlightDownloadTaskPublisher(
+  public func sunlightMultipartUploadTaskPublisher(
     for request: URLRequest
-  ) -> SunlightDownloadTaskPublisher {
-    SunlightDownloadTaskPublisher(request: request, session: self)
+  ) -> SunlightMultipartUploadTaskPublisher {
+    SunlightMultipartUploadTaskPublisher(request: request, session: self)
   }
 
-  public struct SunlightDownloadTaskPublisher: Publisher {
+  public struct SunlightMultipartUploadTaskPublisher: Publisher {
 
     public typealias Output = (
-      payload: (url: URL?, progress: Progress),
+      payload: (data: Data?, progress: Progress),
       response: URLResponse?
     )
     public typealias Failure = URLError
@@ -34,10 +41,10 @@ extension URLSession {
     public func receive<S>(
       subscriber: S
     ) where S: Subscriber,
-            SunlightDownloadTaskPublisher.Failure == S.Failure,
-            SunlightDownloadTaskPublisher.Output == S.Input
+            SunlightMultipartUploadTaskPublisher.Failure == S.Failure,
+            SunlightMultipartUploadTaskPublisher.Output == S.Input
     {
-      let subscription = SunlightDownloadTaskSubscription(
+      let subscription = SunlightMultipartUploadTaskSubscription(
         subscriber: subscriber,
         session: self.session,
         request: self.request
@@ -49,11 +56,11 @@ extension URLSession {
 
 extension URLSession {
 
-  final class SunlightDownloadTaskSubscription<
+  final class SunlightMultipartUploadTaskSubscription<
     SubscriberType: Subscriber
   >: Subscription where
     SubscriberType.Input == (
-      payload: (url: URL?, progress: Progress),
+      payload: (data: Data?, progress: Progress),
       response: URLResponse?
     ),
     SubscriberType.Failure == URLError
@@ -61,7 +68,7 @@ extension URLSession {
     private var subscriber: SubscriberType?
     private var session: URLSession
     private var request: URLRequest
-    private var task: URLSessionDownloadTask?
+    private var task: URLSessionDataTask?
 
     private var progress: NSKeyValueObservation?
 
@@ -76,9 +83,9 @@ extension URLSession {
         return
       }
 
-      self.task = self.session.downloadTask(
+      self.task = self.session.dataTask(
         with: request
-      ) { [weak self] url, response, error in
+      ) { [weak self] data, response, error in
         if let error = error as? URLError {
           self?.subscriber?.receive(completion: .failure(error))
           return
@@ -91,30 +98,11 @@ extension URLSession {
           return
         }
 
-        guard let url = url else {
-          self?.subscriber?.receive(completion: .failure(URLError(.badURL)))
-          return
-        }
-
-        do {
-          let cacheDir = FileManager.default.urls(
-            for: .cachesDirectory,
-            in: .userDomainMask
-          ).first!
-          let fileUrl = cacheDir.appendingPathComponent((UUID().uuidString))
-          try FileManager.default.moveItem(
-            atPath: url.path, toPath: fileUrl.path
-          )
-          _ = self?.subscriber?.receive((
-            payload: (url: fileUrl, progress: Progress()),
-            response: response
-          ))
-          self?.subscriber?.receive(completion: .finished)
-        } catch {
-          self?.subscriber?.receive(
-            completion: .failure(URLError(.cannotCreateFile))
-          )
-        }
+        _ = self?.subscriber?.receive((
+          payload: (data: data, progress: Progress()),
+          response: response
+        ))
+        self?.subscriber?.receive(completion: .finished)
       }
 
       if let task = self.task {
@@ -122,7 +110,7 @@ extension URLSession {
           \.fractionCompleted
         ) { progress, _ in
           _ = self.subscriber?.receive((
-            payload: (url: nil, progress: progress),
+            payload: (data: nil, progress: progress),
             response: nil
           ))
         }
@@ -143,9 +131,9 @@ extension URLSession {
   }
 }
 
-final class SunlightDownloadTaskSubscriber: Subscriber {
+final class SunlightMultipartUploadTaskSubscriber: Subscriber {
   typealias Input = (
-    payload: (url: URL?, progress: Progress),
+    payload: (data: Data?, progress: Progress),
     response: URLResponse?
   )
   typealias Failure = URLError
